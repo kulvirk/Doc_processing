@@ -1,41 +1,101 @@
 import streamlit as st
 import tempfile
 import os
-from run_pipeline import run   # <-- change to your file name
 
-st.title("Parts Extractor — PDF → Excel")
+from run_pipeline import run   # <-- your file name
 
-uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
-
-col1, col2 = st.columns(2)
-
-start_page = col1.number_input(
-    "Start Page",
-    min_value=1,
-    value=1
+st.set_page_config(
+    page_title="Parts Extractor",
+    page_icon="📄",
+    layout="wide"
 )
 
-end_page = col2.number_input(
-    "End Page",
-    min_value=1,
-    value=1
+st.title("📄 Parts Extractor — PDF → Excel")
+
+# ======================================================
+# FILE UPLOAD
+# ======================================================
+
+uploaded_file = st.file_uploader(
+    "Upload PDF Manual",
+    type=["pdf"]
 )
 
-debug = st.checkbox("Debug Mode", value=False)
+# ======================================================
+# PAGE SELECTION MODE
+# ======================================================
 
-if st.button("Run Extraction"):
+st.subheader("Page Selection")
 
-    if not uploaded_file:
-        st.error("Please upload a PDF")
-        st.stop()
+mode = st.radio(
+    "Choose mode",
+    ["All pages", "Page range", "Specific pages"]
+)
+
+pages = None
+
+# ---------- PAGE RANGE ----------
+if mode == "Page range":
+
+    col1, col2 = st.columns(2)
+
+    start_page = col1.number_input(
+        "Start Page",
+        min_value=1,
+        value=1
+    )
+
+    end_page = col2.number_input(
+        "End Page",
+        min_value=1,
+        value=1
+    )
 
     if start_page > end_page:
         st.error("Start page must be ≤ End page")
+    else:
+        pages = list(range(start_page, end_page + 1))
+
+# ---------- SPECIFIC PAGES ----------
+elif mode == "Specific pages":
+
+    page_input = st.text_input(
+        "Enter pages (comma-separated)",
+        placeholder="e.g. 1,3,5,8,10"
+    )
+
+    if page_input:
+        try:
+            pages = sorted({
+                int(p.strip())
+                for p in page_input.split(",")
+                if p.strip()
+            })
+        except ValueError:
+            st.error("Invalid page numbers")
+
+# ======================================================
+# OPTIONS
+# ======================================================
+
+st.subheader("Options")
+
+debug = st.checkbox(
+    "Generate debug overlay PDF",
+    value=False
+)
+
+# ======================================================
+# RUN BUTTON
+# ======================================================
+
+if st.button("🚀 Run Extraction", use_container_width=True):
+
+    if not uploaded_file:
+        st.error("Please upload a PDF file")
         st.stop()
 
-    # ----------------------------
-    # Save uploaded file temporarily
-    # ----------------------------
+    # Save uploaded file
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".pdf"
@@ -46,9 +106,11 @@ if st.button("Run Extraction"):
 
     output_csv = pdf_path.replace(".pdf", ".csv")
 
-    pages = list(range(start_page, end_page + 1))
+    # Progress indicator
+    progress = st.progress(0)
+    progress.progress(20)
 
-    with st.spinner("Processing PDF..."):
+    with st.spinner("Processing document..."):
 
         output_xlsx = run(
             pdf_path=pdf_path,
@@ -57,16 +119,33 @@ if st.button("Run Extraction"):
             pages=pages
         )
 
-    st.success("Extraction complete!")
+    progress.progress(100)
 
-    # ----------------------------
-    # Download button
-    # ----------------------------
+    st.success("Extraction completed successfully!")
+
+    # ==================================================
+    # DOWNLOAD OUTPUT
+    # ==================================================
+
     with open(output_xlsx, "rb") as f:
         st.download_button(
-            "Download Excel",
+            "⬇️ Download Excel Output",
             f,
             file_name=os.path.basename(output_xlsx),
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
         )
 
+    # Optional debug PDF download
+    if debug:
+        debug_pdf = pdf_path.replace(".pdf", "_debug.pdf")
+
+        if os.path.exists(debug_pdf):
+            with open(debug_pdf, "rb") as f:
+                st.download_button(
+                    "⬇️ Download Debug Overlay PDF",
+                    f,
+                    file_name=os.path.basename(debug_pdf),
+                    mime="application/pdf",
+                    use_container_width=True
+                )
