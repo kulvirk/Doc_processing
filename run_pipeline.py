@@ -19,6 +19,8 @@ from multitable_inline.extract_alt_id_parts import extract_alt_id_parts
 from multitable_inline.patterns import PART_NO_REGEX
 from multitable_inline.title_extractor import (extract_page_title, extract_prev_page_title)
 
+
+
 def _first_pn_top(words):
     """
     Find the vertical position of the first PN on the page.
@@ -390,11 +392,9 @@ def run(
 # ==================================================
 if __name__ == "__main__":
     run(
-        pdf_path=r"combined.pdf",
-        output_csv=r"combined.csv",
+        pdf_path=r"C:\Users\Shank\Desktop\parts_extractor\test_manuals\combined.pdf",
+        output_csv=r"C:\Users\Shank\Desktop\parts_extractor\combined.csv",
         debug=True,
         pages=[1,2,3]
     )
  
-
-
