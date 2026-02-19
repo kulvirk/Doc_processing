@@ -1,6 +1,5 @@
 from collections import defaultdict, Counter
 from openpyxl import Workbook
-from PyPDF2 import PdfReader, PdfWriter
 import os
 import tempfile
 from multitable_inline.extract_mark_table import extract_mark_table
@@ -398,3 +397,4 @@ if __name__ == "__main__":
         pages=[1,2,3]
     )
  
+
