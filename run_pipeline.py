@@ -1,7 +1,5 @@
 from collections import defaultdict, Counter
 from openpyxl import Workbook
-import os
-import tempfile
 from multitable_inline.extract_mark_table import extract_mark_table
 from multitable_inline.extract_article_number_table import extract_article_number_table
 from multitable_inline.extract_pos_drawing_table import extract_pos_drawing_table
@@ -397,4 +395,5 @@ if __name__ == "__main__":
         pages=[1,2,3]
     )
  
+
 
