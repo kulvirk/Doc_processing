@@ -1,7 +1,7 @@
 import streamlit as st
 import tempfile
 import os
-from run_py import run   # <-- change to your file name
+from run_pipeline import run   # <-- change to your file name
 
 st.title("Parts Extractor — PDF → Excel")
 
@@ -69,3 +69,4 @@ if st.button("Run Extraction"):
             file_name=os.path.basename(output_xlsx),
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
