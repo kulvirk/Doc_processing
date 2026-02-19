@@ -45,7 +45,6 @@ def split_pdf_pages(input_pdf, pages):
 
     return temp_file.name
 
-
 def _first_pn_top(words):
     """
     Find the vertical position of the first PN on the page.
@@ -151,7 +150,6 @@ def run(
     if pages:
         pdf_path = split_pdf_pages(pdf_path, pages)
 
-    all_parts = []
     all_parts = []
 
     # ----------------------------------------------
@@ -424,9 +422,10 @@ def run(
 # ==================================================
 if __name__ == "__main__":
     run(
-        pdf_path=r"C:\Users\Shank\Desktop\parts_extractor\test_manuals\combined.pdf",
-        output_csv=r"C:\Users\Shank\Desktop\parts_extractor\combined.csv",
+        pdf_path=r"combined.pdf",
+        output_csv=r"combined.csv",
         debug=True,
         pages=[1,2,3]
     )
  
+
