@@ -1,5 +1,6 @@
 from collections import defaultdict, Counter
 from openpyxl import Workbook
+
 from multitable_inline.extract_mark_table import extract_mark_table
 from multitable_inline.extract_article_number_table import extract_article_number_table
 from multitable_inline.extract_pos_drawing_table import extract_pos_drawing_table
@@ -15,8 +16,6 @@ from multitable_inline.inline_pn_extractor import extract_inline_pns
 from multitable_inline.extract_alt_id_parts import extract_alt_id_parts
 from multitable_inline.patterns import PART_NO_REGEX
 from multitable_inline.title_extractor import (extract_page_title, extract_prev_page_title)
-
-
 
 def _first_pn_top(words):
     """
@@ -389,11 +388,8 @@ def run(
 # ==================================================
 if __name__ == "__main__":
     run(
-        pdf_path=r"C:\Users\Shank\Desktop\parts_extractor\test_manuals\combined.pdf",
-        output_csv=r"C:\Users\Shank\Desktop\parts_extractor\combined.csv",
-        debug=True,
-        pages=[1,2,3]
+        pdf_path=r"2013-03-14.pdf",
+        output_csv=r"lksjdakjd.csv",
+        debug=True
     )
  
-
-
