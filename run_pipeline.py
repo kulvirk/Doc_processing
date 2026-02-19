@@ -1,6 +1,8 @@
 from collections import defaultdict, Counter
 from openpyxl import Workbook
-
+from PyPDF2 import PdfReader, PdfWriter
+import os
+import tempfile
 from multitable_inline.extract_mark_table import extract_mark_table
 from multitable_inline.extract_article_number_table import extract_article_number_table
 from multitable_inline.extract_pos_drawing_table import extract_pos_drawing_table
@@ -16,6 +18,33 @@ from multitable_inline.inline_pn_extractor import extract_inline_pns
 from multitable_inline.extract_alt_id_parts import extract_alt_id_parts
 from multitable_inline.patterns import PART_NO_REGEX
 from multitable_inline.title_extractor import (extract_page_title, extract_prev_page_title)
+
+
+
+def split_pdf_pages(input_pdf, pages):
+    """
+    Create a temporary PDF containing ONLY selected pages.
+    pages = list of page numbers (1-based)
+    Returns path to new PDF.
+    """
+
+    reader = PdfReader(input_pdf)
+    writer = PdfWriter()
+
+    for p in pages:
+        if 1 <= p <= len(reader.pages):
+            writer.add_page(reader.pages[p - 1])  # zero-based index
+
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".pdf"
+    )
+
+    with open(temp_file.name, "wb") as f:
+        writer.write(f)
+
+    return temp_file.name
+
 
 def _first_pn_top(words):
     """
@@ -116,6 +145,13 @@ def run(
     debug=False,
     pages=None
 ):
+    # ----------------------------------------------
+    # ⭐ SPLIT PDF FIRST (IMPORTANT)
+    # ----------------------------------------------
+    if pages:
+        pdf_path = split_pdf_pages(pdf_path, pages)
+
+    all_parts = []
     all_parts = []
 
     # ----------------------------------------------
