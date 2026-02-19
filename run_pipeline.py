@@ -19,32 +19,6 @@ from multitable_inline.extract_alt_id_parts import extract_alt_id_parts
 from multitable_inline.patterns import PART_NO_REGEX
 from multitable_inline.title_extractor import (extract_page_title, extract_prev_page_title)
 
-
-
-def split_pdf_pages(input_pdf, pages):
-    """
-    Create a temporary PDF containing ONLY selected pages.
-    pages = list of page numbers (1-based)
-    Returns path to new PDF.
-    """
-
-    reader = PdfReader(input_pdf)
-    writer = PdfWriter()
-
-    for p in pages:
-        if 1 <= p <= len(reader.pages):
-            writer.add_page(reader.pages[p - 1])  # zero-based index
-
-    temp_file = tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=".pdf"
-    )
-
-    with open(temp_file.name, "wb") as f:
-        writer.write(f)
-
-    return temp_file.name
-
 def _first_pn_top(words):
     """
     Find the vertical position of the first PN on the page.
@@ -144,12 +118,6 @@ def run(
     debug=False,
     pages=None
 ):
-    # ----------------------------------------------
-    # ⭐ SPLIT PDF FIRST (IMPORTANT)
-    # ----------------------------------------------
-    if pages:
-        pdf_path = split_pdf_pages(pdf_path, pages)
-
     all_parts = []
 
     # ----------------------------------------------
@@ -428,4 +396,5 @@ if __name__ == "__main__":
         pages=[1,2,3]
     )
  
+
 
