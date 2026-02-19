@@ -2,7 +2,7 @@ import streamlit as st
 import tempfile
 import os
 
-from run_pipeline import run   # <-- your file name
+from run_pipeline import run  
 
 st.set_page_config(
     page_title="Parts Extractor",
@@ -149,3 +149,4 @@ if st.button("🚀 Run Extraction", use_container_width=True):
                     mime="application/pdf",
                     use_container_width=True
                 )
+
