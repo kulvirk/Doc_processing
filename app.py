@@ -120,13 +120,23 @@ if st.button("🚀 Run Extraction", use_container_width=True):
         st.stop()
 
     # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=".pdf"
-    ) as tmp:
+    # with tempfile.NamedTemporaryFile(
+    #     delete=False,
+    #     suffix=".pdf"
+    # ) as tmp:
 
-        tmp.write(uploaded_file.read())
-        pdf_path = tmp.name
+    #     tmp.write(uploaded_file.read())
+    #     pdf_path = tmp.name
+    # Create temp directory
+    temp_dir = tempfile.gettempdir()
+    
+    # Use original filename
+    original_name = uploaded_file.name
+    
+    pdf_path = os.path.join(temp_dir, original_name)
+    
+    with open(pdf_path, "wb") as f:
+        f.write(uploaded_file.read())
 
     output_csv = pdf_path.replace(".pdf", ".csv")
 
@@ -177,3 +187,4 @@ if st.button("🚀 Run Extraction", use_container_width=True):
                     mime="application/pdf",
                     use_container_width=True
                 )
+
