@@ -2,6 +2,11 @@ from collections import defaultdict, Counter
 from openpyxl import Workbook
 
 from multitable_inline.extract_mark_table import extract_mark_table
+from multitable_inline.extract_pmh_mos_table import extract_pmh_mos_table
+from multitable_inline.extract_balloon_bom_table import extract_balloon_bom_table
+from multitable_inline.extract_recommended_spares_table import extract_recommended_spares_table
+from multitable_inline.extract_split_header_item_part_table import extract_split_header_item_part_table
+from multitable_inline.extract_single_level_bom import extract_single_level_bom
 from multitable_inline.extract_article_number_table import extract_article_number_table
 from multitable_inline.extract_pos_drawing_table import extract_pos_drawing_table
 from multitable_inline.extract_pos_item_table import extract_pos_item_table
@@ -17,23 +22,51 @@ from multitable_inline.extract_alt_id_parts import extract_alt_id_parts
 from multitable_inline.patterns import PART_NO_REGEX
 from multitable_inline.title_extractor import (extract_page_title, extract_prev_page_title)
 
-def _first_pn_top(words):
-    """
-    Find the vertical position of the first PN on the page.
-    Used as anchor to look ABOVE table/paragraph.
-    """
-    tops = [
-        w["top"] for w in words
-        if PART_NO_REGEX.search(w.get("text", ""))
-    ]
-    return min(tops) if tops else None
+def _first_pn_top(words, debug=False):
 
+    tops = []
 
+    for w in words:
+        if PART_NO_REGEX.search(w.get("text", "")):
+            tops.append(w["top"])
+            if debug:
+                print(f"[PN-CANDIDATE] text={w['text']} top={w['top']}")
+
+    if not tops:
+        if debug:
+            print("[PN-TOP] None found")
+        return None
+
+    first_top = min(tops)
+
+    if debug:
+        print(f"[PN-TOP] Selected anchor top={first_top}")
+
+    return first_top
 # ==================================================
 # EXPORT WITH SUMMARY (UNCHANGED)
 # ==================================================
-def export_with_summary(all_parts, pages_data, output_xlsx):
+def export_with_summary(all_parts,
+    pages_data,
+    output_xlsx,
+    vendor=None,
+    model=None,
+    project=None,
+    subproject=None,
+    equipment=None,
+    pdf_path=None):
+    
     wb = Workbook()
+    vendor = vendor or "N/A"
+    model = model or "N/A"
+    project = project or "N/A"
+    subproject = subproject or "N/A"
+    equipment = equipment or "N/A"
+
+    filename = "N/A"
+    if pdf_path:
+        import os
+        filename = os.path.basename(pdf_path)
 
     # -------------------------------
     # SHEET 1: PARTS
@@ -41,15 +74,30 @@ def export_with_summary(all_parts, pages_data, output_xlsx):
     ws_parts = wb.active
     ws_parts.title = "Parts"
 
-    ws_parts.append(["page", "title", "part_no", "description", "drawing_number"])
-
+    ws_parts.append([
+        "Vendor",
+        "Model",
+        "DESCRIPTION",
+        "Title_EQUIPMENT_PROJECT",
+        "Drawing",
+        "No Item-(Mnl)",
+        "pageno_FILENAME",
+        "project",
+        "Sub Project No-(Mnl)",
+        "Equipment Name-(Mnl)"
+    ])
     for p in all_parts:
         ws_parts.append([
-            p["page"],
-            p.get("title", ""),
-            p["part_no"],
+            vendor,
+            model,
             p["description"],
-            p.get("drawing_number", "")
+            p.get("title", ""),
+            p.get("drawing_number", ""),
+            p["part_no"],
+            f'{p["page"]}_{filename}',
+            project,
+            subproject,
+            equipment
         ])
 
     # -------------------------------
@@ -113,6 +161,11 @@ def export_with_summary(all_parts, pages_data, output_xlsx):
 def run(
     pdf_path,
     output_csv,
+    vendor=None,
+    model=None,
+    project=None,
+    subproject=None,
+    equipment=None,
     debug=False,
     pages=None
 ):
@@ -298,6 +351,117 @@ def run(
                         normalized,
                         debug=debug
                     )
+                # ⭐ SINGLE LEVEL BOM MODE
+                # ⭐ SINGLE LEVEL BOM MODE
+                elif any(
+                    {"no.", "item", "rev", "description"}.issubset(
+                        {w["text"].lower().strip() for w in row["words"]}
+                    )
+                    for row in normalize_table(page_data)["rows"][:12]
+                ):
+                    if debug:
+                        print(f"[PIPELINE] Page {page_no} | SINGLE LEVEL BOM MODE")
+                
+                    normalized = normalize_table(page_data, debug=debug)
+                
+                    if normalized and normalized.get("rows"):
+                        extracted_parts = extract_single_level_bom(
+                            normalized,
+                            debug=debug
+                        )
+                
+                # ⭐ SPLIT HEADER ITEM/PART TABLE
+                elif (
+                    lambda normalized: any(
+                        (
+                            {"item", "part"}.issubset(
+                                {w["text"].lower() for w in normalized["rows"][i]["words"]}
+                            )
+                            and
+                            "number" in {w["text"].lower() for w in normalized["rows"][i + 1]["words"]}
+                            and
+                            "qty." in {w["text"].lower() for w in normalized["rows"][i + 1]["words"]}
+                            and
+                            "description" in {w["text"].lower() for w in normalized["rows"][i + 1]["words"]}
+                        )
+                        for i in range(len(normalized["rows"]) - 1)
+                    )
+                )(
+                    normalize_table(page_data)
+                ):
+                    if debug:
+                        print(f"[PIPELINE] Page {page_no} | SPLIT HEADER TABLE MODE")
+                
+                    normalized = normalize_table(page_data, debug=debug)
+                
+                    extracted_parts = extract_split_header_item_part_table(
+                        normalized,
+                        debug=debug
+                    )
+
+                # ---------- BALLOON BOM TABLE ----------
+                elif any(
+                    (
+                        "balloon" in row1_text
+                        and "part" in row1_text
+                        and "number" in row2_text
+                        and "rev" in row2_text
+                        and "description" in row2_text
+                    )
+                    for row1_text, row2_text in [
+                        (
+                            " ".join(w["text"].lower() for w in normalized["rows"][i]["words"]),
+                            " ".join(w["text"].lower() for w in normalized["rows"][i + 1]["words"])
+                        )
+                        for i in range(len(normalized["rows"]) - 1)
+                    ]
+                ):
+                    if debug:
+                        print(f"[PIPELINE] Page {page_no} | BALLOON BOM TABLE MODE")
+                
+                    extracted_parts = extract_balloon_bom_table(
+                        normalized,
+                        debug=debug
+                    )
+
+                elif any(
+                    [
+                        [w["text"] for w in row["words"]] ==
+                        ['Parts', 'List', 'Item', 'Qty', 'Description', 'PMH', 'Part', 'No']
+                        for row in normalized["rows"][:12]
+                    ]
+                ):
+                    if debug:
+                        print(f"[PIPELINE] Page {page_no} | RECOMMENDED SPARES MODE")
+                
+                    extracted_parts = extract_recommended_spares_table(
+                        normalized,
+                        debug=debug
+                    )
+
+                # ⭐ PMH / MOS TABLE MODE
+                elif any(
+                    (
+                        "item" in row_text
+                        and "qty" in row_text
+                        and "description" in row_text
+                        and ("pmh part no" in row_text or "mos part no" in row_text)
+                    )
+                    for row_text in [
+                        " ".join(w["text"].lower() for w in row["words"])
+                        for row in normalize_table(page_data)["rows"][:8]
+                    ]
+                ):
+                    if debug:
+                        print(f"[PIPELINE] Page {page_no} | PMH/MOS TABLE MODE")
+                
+                    normalized = normalize_table(page_data, debug=debug)
+                
+                    extracted_parts = extract_pmh_mos_table(
+                        normalized,
+                        debug=debug
+                    )
+
 
                 # ---------- NORMAL TABLE ----------
                 else:
@@ -316,32 +480,96 @@ def run(
                     page_data,
                     debug=debug
                 )
-    
+
         # =====================================================
-        # TITLE EXTRACTION
+        # TITLE EXTRACTION (UPDATED PRIORITY)
         # =====================================================
+        # =====================================================
+        # TITLE EXTRACTION (WITH DEBUG TRACE SUPPORT)
+        # =====================================================
+        
         if not extracted_parts:
             continue
-    
-        pn_top = _first_pn_top(words)
+        
         title = None
-    
-        if pn_top is not None:
-            title = extract_page_title(words, pn_top)
-    
+        title_words = []
+        
+        # 1️⃣ Prefer table structural title
+        if extracted_parts and extracted_parts[0].get("title"):
+            title = extracted_parts[0]["title"]
+        
+            # structural titles already carry title_boxes via extractor
+            # so we don't need to re-detect words here
+        
+        # 2️⃣ Page-level title detection
+        if not title:
+            # --------------------------------------------------
+            # ANCHOR: derive from extracted parts (preferred)
+            # --------------------------------------------------
+            
+            pn_top = None
+            
+            if extracted_parts:
+                for p in extracted_parts:
+                    trace = p.get("trace")
+                    if trace and trace.get("pn_boxes"):
+                        pn_top = min(box["top"] for box in trace["pn_boxes"])
+                        if debug:
+                            print(f"[PN-ANCHOR-FROM-TRACE] top={pn_top}")
+                        break
+            
+            # Fallback only if no trace anchor found
+            if pn_top is None:
+                pn_top = _first_pn_top(words, debug=debug)
+            
+            # Now run page title detection
+            if pn_top is not None:
+                result = extract_page_title(words, pn_top)
+
+                if result:
+                    title, title_words = result
+        
+                    # Capture actual words that form this title
+                    title_words = [
+                        w for w in words
+                        if w["text"] in title.split()
+                        and w["top"] < pn_top
+                    ]
+        
+        # 3️⃣ Previous-page fallback
         if not title and i > 0:
             prev_words = pages_data[i - 1].get("words", [])
-            title = extract_prev_page_title(prev_words)
-    
+            detected_title = extract_prev_page_title(prev_words)
+        
+            if detected_title:
+                title = detected_title
+        
+        # Apply title to all parts
         for p in extracted_parts:
             p["title"] = title or ""
-    
+        
+            # 🔴 Inject title boxes into trace for overlay
+            if debug and title_words:
+                if "trace" not in p:
+                    p["trace"] = {}
+        
+                p["trace"]["title_boxes"] = [
+                    {
+                        "text": w["text"],
+                        "x0": w["x0"],
+                        "x1": w["x1"],
+                        "top": w["top"],
+                        "bottom": w["bottom"],
+                    }
+                    for w in title_words
+                ]
+        
         if debug:
             print(
                 f"[TITLE] Page {page_no} | "
                 f"{title if title else 'NONE'}"
             )
-    
+
         all_parts.extend(extracted_parts)
     
     # =====================================================
@@ -357,10 +585,16 @@ def run(
     output_xlsx = output_csv.replace(".csv", ".xlsx")
 
     export_with_summary(
-        all_parts=all_parts,
-        pages_data=pages_data,
-        output_xlsx=output_xlsx
-    )
+    all_parts=all_parts,
+    pages_data=pages_data,
+    output_xlsx=output_xlsx,
+    vendor=vendor,
+    model=model,
+    project=project,
+    subproject=subproject,
+    equipment=equipment,
+    pdf_path=pdf_path
+)
 
     # ----------------------------------------------
     # DEBUG OVERLAY PDF (UNCHANGED)
@@ -387,9 +621,12 @@ def run(
 # CLI
 # ==================================================
 if __name__ == "__main__":
-    run(
-        pdf_path=r"2013-03-14.pdf",
-        output_csv=r"lksjdakjd.csv",
-        debug=True
-    )
+   run(
+    pdf_path=r"Quicy QR-370LS.pdf",
+    output_csv=r"Quicy QR-370LS.csv",
+
+
+    
+    debug=True
+)
  
