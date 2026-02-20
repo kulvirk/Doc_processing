@@ -316,7 +316,10 @@ def run(
     # STEP 1 — Extract words from ALL pages
     # ----------------------------------------------
     pages_data = extract_table_candidates(pdf_path)
-    vendor,model = detect_vendor(pdf_path, pages_data, KNOWN_VENDORS)
+    f not vendor:
+        vendor, b= detect_vendor(pdf_path, pages_data, KNOWN_VENDORS)
+    if not model:
+        a,model = detect_vendor(pdf_path, pages_data, KNOWN_VENDORS)
 
 
     if debug:
@@ -773,3 +776,4 @@ if __name__ == "__main__":
     debug=True
 )
  
+
