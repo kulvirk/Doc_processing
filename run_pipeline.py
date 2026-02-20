@@ -1,6 +1,6 @@
 from collections import defaultdict, Counter
 from openpyxl import Workbook
-
+import os,re
 from multitable_inline.extract_mark_table import extract_mark_table
 from multitable_inline.extract_pmh_mos_table import extract_pmh_mos_table
 from multitable_inline.extract_balloon_bom_table import extract_balloon_bom_table
@@ -22,6 +22,147 @@ from multitable_inline.extract_alt_id_parts import extract_alt_id_parts
 from multitable_inline.patterns import PART_NO_REGEX
 from multitable_inline.title_extractor import (extract_page_title, extract_prev_page_title)
 
+KNOWN_VENDORS = [
+    "QUINCY",
+    "ATLAS COPCO",
+    "INGERSOLL RAND",
+    "KAESER",
+    "SIEMENS",
+    "SULLAIR",
+    "ELGI",
+    "KIRLOSKAR",
+    "CATERPILLAR",
+    "HITACHI"
+]
+
+def detect_vendor_from_filename(pdf_path, pages_data, known_vendors):
+    """
+    Extract vendor + model from filename,
+    but only accept if vendor or model appears in first page text.
+    """
+
+    if not pages_data:
+        return None, None
+
+    # -----------------------------
+    # First page text
+    # -----------------------------
+    first_page_text = pages_data[0].get("page_text", "").upper()
+
+    # -----------------------------
+    # Extract filename
+    # -----------------------------
+    filename = os.path.basename(pdf_path)
+    name = os.path.splitext(filename)[0]
+
+    # Normalize
+    clean_name = re.sub(r"[_\-]+", " ", name).upper().strip()
+    parts = clean_name.split()
+
+    if not parts:
+        return None, None
+
+    # -----------------------------
+    # Try matching known vendor
+    # -----------------------------
+    vendor = None
+    model = None
+
+    for v in known_vendors:
+        if v in clean_name:
+            vendor = v
+            break
+
+    # Model = everything except vendor
+    if vendor:
+        model_candidate = clean_name.replace(vendor, "").strip()
+        model = model_candidate if model_candidate else None
+    else:
+        return None, None
+
+    # -----------------------------
+    # VALIDATION STEP
+    # -----------------------------
+    # Accept only if vendor or model appears in first page
+    if vendor in first_page_text:
+        return vendor, model
+
+    if model and model in first_page_text:
+        return vendor, model
+
+    # Not validated
+    return None, None
+
+def detect_vendor_from_text(pages_data, known_vendors):
+
+    if not pages_data:
+        return None
+
+    first_page_text = pages_data[0].get("page_text", "").upper()
+
+    for vendor in known_vendors:
+        if vendor in first_page_text:
+            return vendor
+
+    return None
+
+def detect_model_from_text(pages_data):
+
+    if not pages_data:
+        return None
+
+    text = pages_data[0].get("page_text", "")
+    if not text:
+        return None
+
+    keywords = [
+        "MODEL",
+        "SERIES",
+        "PROJECT",
+        "TYPE",
+        "CODE",
+        "P/N",
+        "PN",
+        "PART NO",
+        "MODEL NO"
+    ]
+
+    lines = text.splitlines()
+
+    for line in lines:
+        line_upper = line.strip().upper()
+
+        for kw in keywords:
+            if line_upper.startswith(kw):
+
+                # Remove keyword + optional ":" or "-"
+                value = re.sub(
+                    rf"^{kw}\s*[:\-]?\s*",
+                    "",
+                    line.strip(),
+                    flags=re.IGNORECASE
+                )
+
+                if value:
+                    return value.strip()
+
+    return None
+
+def detect_vendor(pdf_path, pages_data, known_vendors):
+
+    # 1️⃣ Try filename first
+    vendor, model = detect_vendor_from_filename(
+    pdf_path,
+    pages_data,
+    KNOWN_VENDORS
+)
+
+    if not vendor:
+        vendor = detect_vendor_from_text(pages_data, known_vendors)
+    if not model:
+        model=detect_model_from_text(pages_data)
+
+    return vendor,model
 def _first_pn_top(words, debug=False):
 
     tops = []
@@ -175,6 +316,8 @@ def run(
     # STEP 1 — Extract words from ALL pages
     # ----------------------------------------------
     pages_data = extract_table_candidates(pdf_path)
+    vendor,model = detect_vendor(pdf_path, pages_data, KNOWN_VENDORS)
+
 
     if debug:
         print(f"[PIPELINE] Total pages scanned: {len(pages_data)}")
@@ -623,7 +766,7 @@ def run(
 if __name__ == "__main__":
    run(
     pdf_path=r"Quicy QR-370LS.pdf",
-    output_csv=r"Quicy QR-370LS.csv",
+    output_csv=r"QR-370LS.csv",
 
 
     
