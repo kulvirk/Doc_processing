@@ -2,7 +2,7 @@ import streamlit as st
 import tempfile
 import os
 
-from run_pipeline import run  
+from run_pipeline import run
 
 st.set_page_config(
     page_title="Parts Extractor",
@@ -20,6 +20,30 @@ uploaded_file = st.file_uploader(
     "Upload PDF Manual",
     type=["pdf"]
 )
+
+# ======================================================
+# METADATA INPUT (NEW SECTION)
+# ======================================================
+
+st.subheader("Project & Equipment Details (Optional)")
+
+col1, col2 = st.columns(2)
+
+vendor = col1.text_input("Vendor")
+model = col2.text_input("Model")
+
+project = col1.text_input("Project")
+subproject = col2.text_input("Sub Project")
+
+equipment = st.text_input("Equipment Name")
+
+# Convert empty strings → None
+vendor = vendor.strip() or None
+model = model.strip() or None
+project = project.strip() or None
+subproject = subproject.strip() or None
+equipment = equipment.strip() or None
+
 
 # ======================================================
 # PAGE SELECTION MODE
@@ -95,7 +119,7 @@ if st.button("🚀 Run Extraction", use_container_width=True):
         st.error("Please upload a PDF file")
         st.stop()
 
-    # Save uploaded file
+    # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".pdf"
@@ -106,7 +130,6 @@ if st.button("🚀 Run Extraction", use_container_width=True):
 
     output_csv = pdf_path.replace(".pdf", ".csv")
 
-    # Progress indicator
     progress = st.progress(0)
     progress.progress(20)
 
@@ -115,6 +138,11 @@ if st.button("🚀 Run Extraction", use_container_width=True):
         output_xlsx = run(
             pdf_path=pdf_path,
             output_csv=output_csv,
+            vendor=vendor,
+            model=model,
+            project=project,
+            subproject=subproject,
+            equipment=equipment,
             debug=debug,
             pages=pages
         )
@@ -149,4 +177,3 @@ if st.button("🚀 Run Extraction", use_container_width=True):
                     mime="application/pdf",
                     use_container_width=True
                 )
-
