@@ -4,6 +4,7 @@ pdfplumber
 pandas
 PyMuPDF
 PyPDF2
-re
+
+
 
 
