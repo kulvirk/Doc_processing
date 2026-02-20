@@ -14,6 +14,7 @@ MAX_DESC_SENTENCES = 2
 def extract_inline_pns(table_candidate, debug=False):
     page = table_candidate["page"]
     text = table_candidate.get("page_text", "")
+    words = table_candidate.get("words", [])
 
     if not text or "P/N" not in text:
         return []
@@ -84,10 +85,55 @@ def extract_inline_pns(table_candidate, debug=False):
         if len(desc) < 4:
             continue
 
+        # ------------------------------
+        # Geometry capture
+        # ------------------------------
+
+        # ------------------------------
+        # Geometry capture (clean version)
+        # ------------------------------
+        
+        pn_boxes = []
+        desc_boxes = []
+        
+        # 1️⃣ Find PN words (substring match)
+        for w in words:
+            if pn in w["text"]:
+                pn_boxes.append({
+                    "text": w["text"],
+                    "x0": w["x0"],
+                    "x1": w["x1"],
+                    "top": w["top"],
+                    "bottom": w["bottom"],
+                })
+        
+        if pn_boxes:
+            pn_word = pn_boxes[0]
+            pn_top = pn_word["top"]
+            pn_x0 = pn_word["x0"]
+        
+            # 2️⃣ Capture words on same line, left of PN only
+            for w in words:
+                if (
+                    abs(w["top"] - pn_top) < 8 and
+                    w["x1"] <= pn_x0
+                ):
+                    desc_boxes.append({
+                        "text": w["text"],
+                        "x0": w["x0"],
+                        "x1": w["x1"],
+                        "top": w["top"],
+                        "bottom": w["bottom"],
+                    })
+
         results.append({
             "page": page,
             "part_no": pn,
-            "description": desc
+            "description": desc,
+            "trace": {
+                "pn_boxes": pn_boxes,
+                "desc_boxes": desc_boxes
+            }
         })
 
         if debug:

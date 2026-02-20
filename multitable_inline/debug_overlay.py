@@ -3,6 +3,7 @@ import fitz  # PyMuPDF
 GREEN = (0, 1, 0)
 BLUE = (0, 0, 1)
 YELLOW = (1, 1, 0)  # 🔶 Drawing Number
+RED = (1, 0, 0)  # 🔴 Title
 
 
 def generate_debug_pdf(
@@ -57,6 +58,16 @@ def generate_debug_pdf(
                 drawing_box["bottom"]
             )
             page.draw_rect(rect, color=YELLOW, width=1.5)
+
+        # ---- Title boxes (RED) ----
+        for box in trace.get("title_boxes", []):
+            rect = fitz.Rect(
+                box["x0"],
+                box["top"],
+                box["x1"],
+                box["bottom"]
+            )
+            page.draw_rect(rect, color=RED, width=1.8)
 
     doc.save(output_pdf)
     doc.close()

@@ -15,7 +15,76 @@ ITEM_NO_REGEX = re.compile(
 DRAWING_REF_REGEX = re.compile(
     r"\bD\d{4}[-]?\d+\b"
 )
+def _extract_alt_id_structural_title(normalized_table):
 
+    rows = normalized_table.get("rows", [])
+    if not rows:
+        return None, []
+
+    drawing_name_row = None
+    header_row = None
+
+    # -------------------------------------------------
+    # 1️⃣ Detect Drawing Name row and table header
+    # -------------------------------------------------
+    for row in rows:
+        row_text = " ".join(w["text"].lower() for w in row["words"])
+
+        if "drawing" in row_text and "name" in row_text:
+            drawing_name_row = row
+
+        if "alternate" in row_text or "item no" in row_text:
+            header_row = row
+
+    if not drawing_name_row or not header_row:
+        return None, []
+
+    header_top = min(w["top"] for w in header_row["words"])
+
+    # -------------------------------------------------
+    # 2️⃣ Find value column start (after label)
+    # -------------------------------------------------
+    sorted_words = sorted(drawing_name_row["words"], key=lambda w: w["x0"])
+
+    value_start_x = None
+
+    for i, w in enumerate(sorted_words):
+        if "name" in w["text"].lower():
+            if i + 1 < len(sorted_words):
+                value_start_x = sorted_words[i + 1]["x0"]
+            break
+
+    if value_start_x is None:
+        return None, []
+
+    # Right bound = stop before next metadata column
+    # We use header row width as safe max
+    header_words = sorted(header_row["words"], key=lambda w: w["x0"])
+    right_bound = header_words[-1]["x1"] - 10
+
+    top_bound = max(w["bottom"] for w in drawing_name_row["words"])
+    bottom_bound = header_top - 5
+
+    # -------------------------------------------------
+    # 3️⃣ Collect only value-column words
+    # -------------------------------------------------
+    title_words = []
+
+    for row in rows:
+        for w in row["words"]:
+            if (
+                value_start_x <= w["x0"] <= right_bound
+                and top_bound <= w["top"] <= bottom_bound
+            ):
+                title_words.append(w)
+
+    if not title_words:
+        return None, []
+
+    title_words = sorted(title_words, key=lambda x: (x["top"], x["x0"]))
+    title = " ".join(w["text"] for w in title_words).strip()
+
+    return title, title_words
 def extract_drawing_number_from_rows(rows):
 
     for row in rows[:10]:
@@ -80,6 +149,7 @@ def extract_alt_id_parts(normalized_table, debug=False):
 
     page = normalized_table["page"]
     rows = normalized_table["rows"]
+    table_title, title_words = _extract_alt_id_structural_title(normalized_table)
     drawing_no, drawing_box = extract_drawing_number_from_rows(rows)
     columns = normalized_table.get("columns", [])
     part_col = normalized_table.get("part_col")
@@ -211,7 +281,8 @@ def extract_alt_id_parts(normalized_table, debug=False):
                 "page": page,
                 "part_no": ident,
                 "description": description,
-                "drawing_number": drawing_no or ""
+                "drawing_number": drawing_no or "",
+                "title": table_title or ""
             }
             
             # Optional: keep original meaning if you want
@@ -246,6 +317,18 @@ def extract_alt_id_parts(normalized_table, debug=False):
                 # 🔶 ADD DRAWING NUMBER BOX (YELLOW)
                 if drawing_box:
                     trace["drawing_box"] = drawing_box
+                 # 🔴 ADD TITLE BOXES  ← ADD IT HERE
+                if table_title and title_words:
+                    trace["title_boxes"] = [
+                        {
+                            "text": w["text"],
+                            "x0": w["x0"],
+                            "x1": w["x1"],
+                            "top": w["top"],
+                            "bottom": w["bottom"],
+                        }
+                        for w in title_words
+                    ]
             
                 entry["trace"] = trace
 

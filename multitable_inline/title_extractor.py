@@ -12,8 +12,8 @@ def _is_bold(ws):
             return True
     return False
 
-
 def _looks_like_text(text):
+
     if not text:
         return False
 
@@ -22,7 +22,14 @@ def _looks_like_text(text):
         return False
 
     alpha = sum(c.isalpha() for c in text)
-    if alpha / len(text) < 0.4:
+    alpha_ratio = alpha / len(text)
+
+    if alpha_ratio < 0.5:
+        return False
+
+    # NEW: reject high symbol density
+    non_alnum = sum(not c.isalnum() and not c.isspace() for c in text)
+    if non_alnum / len(text) > 0.2:
         return False
 
     return True
@@ -44,12 +51,16 @@ def extract_page_title(words, pn_top):
     candidates = []
 
     for top, ws in lines.items():
+        
         if top >= pn_top:
             continue
 
         text = " ".join(w["text"] for w in ws).strip()
-
-        if len(text) < 3 or len(text) > 150:
+        if len(text) < 5 or len(text) > 150:
+            continue
+        
+        # Reject single short words
+        if len(text.split()) == 1 and len(text) < 8:
             continue
         if not any(c.isalpha() for c in text):
             continue
@@ -67,16 +78,18 @@ def extract_page_title(words, pn_top):
             "top": top,
             "size": avg_size,
             "bold": bold,
-            "text": text
+            "text": text,
+            "words": ws
         })
 
     if not candidates:
         return None
 
     # 1) highest font size wins
+    
     candidates.sort(key=lambda x: x["size"], reverse=True)
     max_size = candidates[0]["size"]
-
+    
     top_font = [c for c in candidates if c["size"] >= max_size * 0.95]
 
     # 2) prefer bold
@@ -91,8 +104,8 @@ def extract_page_title(words, pn_top):
         ),
         reverse=True
     )
-
-    return final[0]["text"]
+    selected = final[0]
+    return selected["text"], selected["words"]
 
 
 def extract_prev_page_title(words):

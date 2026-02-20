@@ -98,6 +98,61 @@ def extract_mark_table(normalized_table, debug=False):
         print(f"[MARK] Header Y cutoff: {header_y}")
         print("=" * 80)
 
+
+    # -------------------------------------------------
+    # 🔥 SECTION TITLE DETECTION (MARK TABLE)
+    # -------------------------------------------------
+    section_title = None
+    title_words = []
+
+    header_top = header_y
+
+    # Collect candidate words in DESC column above header
+    candidate_words = [
+        w for row in rows
+        for w in row["words"]
+        if (
+            w["bottom"] < header_top
+            and desc_col_range[0] <= w["x0"] <= desc_col_range[1]
+        )
+    ]
+
+    # Sort top → bottom
+    candidate_words = sorted(candidate_words, key=lambda x: (x["top"], x["x0"]))
+
+    if candidate_words:
+
+        # Group into lines
+        lines = {}
+        for w in candidate_words:
+            key = round(w["top"], 1)
+            lines.setdefault(key, []).append(w)
+
+        sorted_lines = sorted(lines.items(), key=lambda x: x[0])
+
+        collected_words = []
+        last_top = None
+        MAX_GAP = 20
+
+        for top, ws in sorted_lines:
+
+            if last_top is not None:
+                if top - last_top > MAX_GAP:
+                    break
+
+            collected_words.extend(ws)
+            last_top = top
+
+        if collected_words:
+            section_title = " ".join(
+                w["text"] for w in sorted(collected_words, key=lambda x: (x["top"], x["x0"]))
+            ).strip()
+
+            title_words = collected_words
+
+    if debug:
+        print(f"[MARK TITLE] Page {page} | {section_title}")
+
     # -------------------------------------------------
     # 3️⃣ COLLECT ALL WORDS BELOW HEADER
     # -------------------------------------------------
@@ -183,15 +238,16 @@ def extract_mark_table(normalized_table, debug=False):
             print("\n[MARK][ROW]")
             print(f"PN = {part_no}")
             print(f"DESC = {description}")
-    
+
         entry = {
             "page": page,
             "part_no": part_no,
-            "description": description
+            "description": description,
+            "title": section_title or ""
         }
-    
+
         if debug:
-            entry["trace"] = {
+            trace = {
                 "pn_boxes": [{
                     "text": mark_w["text"],
                     "x0": mark_w["x0"],
@@ -210,7 +266,22 @@ def extract_mark_table(normalized_table, debug=False):
                     for w in desc_words
                 ]
             }
-    
+        
+            # 🔴 TITLE BOXES
+            if section_title and title_words:
+                trace["title_boxes"] = [
+                    {
+                        "text": w["text"],
+                        "x0": w["x0"],
+                        "x1": w["x1"],
+                        "top": w["top"],
+                        "bottom": w["bottom"],
+                    }
+                    for w in title_words
+                ]
+        
+            entry["trace"] = trace
+
         results.append(entry)
     
     return results
