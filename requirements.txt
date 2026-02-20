@@ -4,3 +4,6 @@ pdfplumber
 pandas
 PyMuPDF
 PyPDF2
+os
+re
+
