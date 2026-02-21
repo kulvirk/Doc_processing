@@ -85,7 +85,7 @@ KNOWN_VENDORS = [
     "KODEN",
     "JORTON",
     "ALSTOM",
-    "Totco",
+    "Woolslayer",
     "DOOLEYTAKEBERRY Inc",
     "ALFA LAVAL",
     "BESLER ELECTRIC",
@@ -836,6 +836,7 @@ if __name__ == "__main__":
     debug=True
 )
  
+
 
 
 
