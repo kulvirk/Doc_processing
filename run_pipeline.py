@@ -89,7 +89,7 @@ KNOWN_VENDORS = [
     "DOOLEYTAKEBERRY Inc",
     "ALFA LAVAL",
     "BESLER ELECTRIC",
-    "PepperL,
+    "PepperL",
     "Signal International",
     "Vertical",
     "WILKERSON"
@@ -836,6 +836,7 @@ if __name__ == "__main__":
     debug=True
 )
  
+
 
 
 
