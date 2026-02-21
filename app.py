@@ -5,7 +5,7 @@ import os
 from run_pipeline import run
 
 st.set_page_config(
-    page_title="Parts Extractor",
+    page_title="Parts",
     page_icon="📄",
     layout="wide"
 )
@@ -187,4 +187,5 @@ if st.button("🚀 Run Extraction", use_container_width=True):
                     mime="application/pdf",
                     use_container_width=True
                 )
+
 
