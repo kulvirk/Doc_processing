@@ -1,7 +1,6 @@
 import streamlit as st
 import tempfile
 import os
-import base64
 
 from run_pipeline import run
 
@@ -15,33 +14,13 @@ st.title("📄 Parts Extractor — PDF → Excel")
 
 
 # ======================================================
-# PDF VIEWER FUNCTION
+# HALF PAGE LAYOUT
 # ======================================================
 
-def pdf_viewer(file_path, height=900):
-    with open(file_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode("utf-8")
-
-    pdf_display = f"""
-        <iframe
-            src="data:application/pdf;base64,{base64_pdf}"
-            width="100%"
-            height="{height}"
-            style="border:none;"
-        ></iframe>
-    """
-    st.markdown(pdf_display, unsafe_allow_html=True)
-
+left, right = st.columns([1, 1])
 
 # ======================================================
-# MAIN LAYOUT
-# ======================================================
-
-left, right = st.columns(2)
-
-
-# ======================================================
-# LEFT SIDE — UI
+# LEFT SIDE — FULL UI
 # ======================================================
 
 with left:
@@ -51,7 +30,7 @@ with left:
         type=["pdf"]
     )
 
-    st.subheader("Project & Equipment Details (Optional)")
+    st.subheader("Project & Equipment Details")
 
     col1, col2 = st.columns(2)
 
@@ -69,9 +48,9 @@ with left:
     subproject = subproject.strip() or None
     equipment = equipment.strip() or None
 
-    # ------------------------------
+    # -------------------------
     # PAGE SELECTION
-    # ------------------------------
+    # -------------------------
 
     st.subheader("Page Selection")
 
@@ -111,9 +90,9 @@ with left:
             except:
                 st.error("Invalid page numbers")
 
-    # ------------------------------
+    # -------------------------
     # OPTIONS
-    # ------------------------------
+    # -------------------------
 
     st.subheader("Options")
 
@@ -122,10 +101,7 @@ with left:
         value=False
     )
 
-    # ==================================================
-    # RUN BUTTON (ALWAYS VISIBLE)
-    # ==================================================
-
+    # 🚀 RUN BUTTON
     run_clicked = st.button(
         "🚀 Run Extraction",
         use_container_width=True
@@ -133,7 +109,7 @@ with left:
 
 
 # ======================================================
-# PROCESSING (OUTSIDE COLUMN — IMPORTANT)
+# PROCESSING (OUTSIDE COLUMN)
 # ======================================================
 
 if run_clicked:
@@ -169,25 +145,18 @@ if run_clicked:
 
     progress.progress(100)
 
-    st.success("Extraction completed successfully!")
+    st.success("Extraction completed!")
 
-    # Save outputs in session_state
     st.session_state["output_xlsx"] = output_xlsx
-
-    if debug:
-        debug_pdf = pdf_path.replace(".pdf", "_debug.pdf")
-        if os.path.exists(debug_pdf):
-            st.session_state["debug_pdf"] = debug_pdf
 
 
 # ======================================================
-# DOWNLOAD BUTTON (LEFT SIDE)
+# DOWNLOAD BUTTON (LEFT)
 # ======================================================
 
 with left:
 
     if "output_xlsx" in st.session_state:
-
         with open(st.session_state["output_xlsx"], "rb") as f:
             st.download_button(
                 "⬇️ Download Excel Output",
@@ -199,14 +168,8 @@ with left:
 
 
 # ======================================================
-# RIGHT SIDE — DEBUG VIEWER
+# RIGHT SIDE — EMPTY
 # ======================================================
 
 with right:
-
-    st.subheader("🔍 Debug PDF Viewer")
-
-    if "debug_pdf" in st.session_state:
-        pdf_viewer(st.session_state["debug_pdf"])
-    else:
-        st.info("Run extraction with debug enabled to view PDF")
+    st.empty()
