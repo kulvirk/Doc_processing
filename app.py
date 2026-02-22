@@ -13,8 +13,9 @@ st.set_page_config(
 
 st.title("📄 Parts Extractor — PDF → Excel")
 
+
 # ======================================================
-# PDF VIEWER FUNCTION (SCROLLABLE)
+# PDF VIEWER FUNCTION
 # ======================================================
 
 def pdf_viewer(file_path, height=900):
@@ -26,7 +27,6 @@ def pdf_viewer(file_path, height=900):
             src="data:application/pdf;base64,{base64_pdf}"
             width="100%"
             height="{height}"
-            type="application/pdf"
             style="border:none;"
         ></iframe>
     """
@@ -34,26 +34,23 @@ def pdf_viewer(file_path, height=900):
 
 
 # ======================================================
-# MAIN TWO-COLUMN LAYOUT (HALF + HALF)
+# MAIN LAYOUT
 # ======================================================
 
-left, right = st.columns([1, 1])
+left, right = st.columns(2)
+
 
 # ======================================================
-# LEFT SIDE — FULL UI
+# LEFT SIDE — UI
 # ======================================================
 
 with left:
 
-    # FILE UPLOAD
     uploaded_file = st.file_uploader(
         "Upload PDF Manual",
         type=["pdf"]
     )
 
-    # ------------------------------
-    # METADATA INPUT
-    # ------------------------------
     st.subheader("Project & Equipment Details (Optional)")
 
     col1, col2 = st.columns(2)
@@ -75,6 +72,7 @@ with left:
     # ------------------------------
     # PAGE SELECTION
     # ------------------------------
+
     st.subheader("Page Selection")
 
     mode = st.radio(
@@ -88,28 +86,19 @@ with left:
 
         c1, c2 = st.columns(2)
 
-        start_page = c1.number_input(
-            "Start Page",
-            min_value=1,
-            value=1
-        )
+        start_page = c1.number_input("Start Page", min_value=1, value=1)
+        end_page = c2.number_input("End Page", min_value=1, value=1)
 
-        end_page = c2.number_input(
-            "End Page",
-            min_value=1,
-            value=1
-        )
-
-        if start_page > end_page:
-            st.error("Start page must be ≤ End page")
-        else:
+        if start_page <= end_page:
             pages = list(range(start_page, end_page + 1))
+        else:
+            st.error("Start page must be ≤ End page")
 
     elif mode == "Specific pages":
 
         page_input = st.text_input(
             "Enter pages (comma-separated)",
-            placeholder="e.g. 1,3,5,8,10"
+            placeholder="e.g. 1,3,5,8"
         )
 
         if page_input:
@@ -119,12 +108,13 @@ with left:
                     for p in page_input.split(",")
                     if p.strip()
                 })
-            except ValueError:
+            except:
                 st.error("Invalid page numbers")
 
     # ------------------------------
     # OPTIONS
     # ------------------------------
+
     st.subheader("Options")
 
     debug = st.checkbox(
@@ -133,62 +123,83 @@ with left:
     )
 
     # ==================================================
-    # RUN BUTTON
+    # RUN BUTTON (ALWAYS VISIBLE)
     # ==================================================
 
-    if st.button("🚀 Run Extraction", use_container_width=True):
+    run_clicked = st.button(
+        "🚀 Run Extraction",
+        use_container_width=True
+    )
 
-        if not uploaded_file:
-            st.error("Please upload a PDF file")
-            st.stop()
 
-        temp_dir = tempfile.gettempdir()
-        pdf_path = os.path.join(temp_dir, uploaded_file.name)
+# ======================================================
+# PROCESSING (OUTSIDE COLUMN — IMPORTANT)
+# ======================================================
 
-        with open(pdf_path, "wb") as f:
-            f.write(uploaded_file.read())
+if run_clicked:
 
-        output_csv = pdf_path.replace(".pdf", ".csv")
+    if not uploaded_file:
+        st.error("Please upload a PDF file")
+        st.stop()
 
-        progress = st.progress(0)
-        progress.progress(20)
+    temp_dir = tempfile.gettempdir()
+    pdf_path = os.path.join(temp_dir, uploaded_file.name)
 
-        with st.spinner("Processing document..."):
+    with open(pdf_path, "wb") as f:
+        f.write(uploaded_file.read())
 
-            output_xlsx = run(
-                pdf_path=pdf_path,
-                output_csv=output_csv,
-                vendor=vendor,
-                model=model,
-                project=project,
-                subproject=subproject,
-                equipment=equipment,
-                debug=debug,
-                pages=pages
-            )
+    output_csv = pdf_path.replace(".pdf", ".csv")
 
-        progress.progress(100)
+    progress = st.progress(0)
+    progress.progress(20)
 
-        st.success("Extraction completed successfully!")
+    with st.spinner("Processing document..."):
 
-        # DOWNLOAD EXCEL
-        with open(output_xlsx, "rb") as f:
+        output_xlsx = run(
+            pdf_path=pdf_path,
+            output_csv=output_csv,
+            vendor=vendor,
+            model=model,
+            project=project,
+            subproject=subproject,
+            equipment=equipment,
+            debug=debug,
+            pages=pages
+        )
+
+    progress.progress(100)
+
+    st.success("Extraction completed successfully!")
+
+    # Save outputs in session_state
+    st.session_state["output_xlsx"] = output_xlsx
+
+    if debug:
+        debug_pdf = pdf_path.replace(".pdf", "_debug.pdf")
+        if os.path.exists(debug_pdf):
+            st.session_state["debug_pdf"] = debug_pdf
+
+
+# ======================================================
+# DOWNLOAD BUTTON (LEFT SIDE)
+# ======================================================
+
+with left:
+
+    if "output_xlsx" in st.session_state:
+
+        with open(st.session_state["output_xlsx"], "rb") as f:
             st.download_button(
                 "⬇️ Download Excel Output",
                 f,
-                file_name=os.path.basename(output_xlsx),
+                file_name=os.path.basename(st.session_state["output_xlsx"]),
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
 
-        # SAVE DEBUG PATH IN SESSION
-        if debug:
-            debug_pdf = pdf_path.replace(".pdf", "_debug.pdf")
-            if os.path.exists(debug_pdf):
-                st.session_state["debug_pdf"] = debug_pdf
 
 # ======================================================
-# RIGHT SIDE — DEBUG PDF VIEWER ONLY
+# RIGHT SIDE — DEBUG VIEWER
 # ======================================================
 
 with right:
@@ -198,4 +209,4 @@ with right:
     if "debug_pdf" in st.session_state:
         pdf_viewer(st.session_state["debug_pdf"])
     else:
-        st.info("Debug PDF will appear here after extraction")
+        st.info("Run extraction with debug enabled to view PDF")
