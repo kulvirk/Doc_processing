@@ -55,25 +55,77 @@ def extract_pos_item_table(normalized_table, debug=False):
 
     if not rows:
         return results
+
     # -----------------------------------------
-    # Extract drawing number (only for this table)
+    # Extract drawing number
     # -----------------------------------------
     drawing_no, drawing_box = extract_drawing_number_from_rows(rows)
 
-    # -------------------------------------------------
-    # 1️⃣ FIND HEADER ROW
-    # -------------------------------------------------
+    # =================================================
+    # 🔴 TITLE EXTRACTION (ISOLATED – NO SIDE EFFECTS)
+    # =================================================
+
+    table_title = None
+    title_words = []
+
+    drawing_row = None
+
+    for r in rows[:8]:
+        row_text = " ".join(w["text"].lower() for w in r["words"])
+        if "drawingname" in row_text.replace(" ", ""):
+            drawing_row = r
+            break
+
+    if drawing_row:
+
+        drawing_words = sorted(drawing_row["words"], key=lambda w: w["x0"])
+
+        drawingname_x = None
+        right_anchor_x = None
+
+        for w in drawing_words:
+            txt = w["text"].lower().replace(" ", "")
+            if txt.startswith("drawingname"):
+                drawingname_x = w["x0"]
+            if txt.startswith("drawingrevision"):
+                right_anchor_x = w["x0"]
+
+        if drawingname_x is not None:
+
+            LEFT = drawingname_x - 5
+            RIGHT = right_anchor_x - 5 if right_anchor_x else float("inf")
+
+            TOP = max(w["bottom"] for w in drawing_row["words"])
+            MAX_LOOKAHEAD = 35
+
+            for r in rows:
+                if r["top"] <= TOP:
+                    continue
+                if r["top"] - TOP > MAX_LOOKAHEAD:
+                    break
+                for w in r["words"]:
+                    if LEFT <= w["x0"] <= RIGHT:
+                        title_words.append(w)
+
+            if title_words:
+                title_words = sorted(title_words, key=lambda x: (x["top"], x["x0"]))
+                table_title = " ".join(w["text"] for w in title_words).strip()
+
+    # =================================================
+    # ORIGINAL EXTRACTION LOGIC (UNCHANGED)
+    # =================================================
+
     header_row = None
 
-    for row in rows[:15]:
-        row_text = " ".join(w["text"].lower() for w in row["words"])
+    for r in rows[:15]:
+        row_text = " ".join(w["text"].lower() for w in r["words"])
         if (
             "pos" in row_text
             and "qty" in row_text
             and "item name" in row_text
             and "item no" in row_text
         ):
-            header_row = row
+            header_row = r
             break
 
     if not header_row:
@@ -83,9 +135,6 @@ def extract_pos_item_table(normalized_table, debug=False):
         print("\n[POS-ITEM HEADER]")
         print([w["text"] for w in header_row["words"]])
 
-    # -------------------------------------------------
-    # 2️⃣ GET HEADER X POSITIONS
-    # -------------------------------------------------
     item_name_x = None
     item_no_x = None
     qty_x = None
@@ -98,59 +147,33 @@ def extract_pos_item_table(normalized_table, debug=False):
         if text == "qty":
             qty_x = w["x0"]
 
-        # detect split "item name"
         if text == "item" and i + 1 < len(words):
             next_text = words[i + 1]["text"].lower().replace(".", "")
-
             if next_text == "name":
                 item_name_x = w["x0"]
-
             if next_text == "no":
                 item_no_x = w["x0"]
 
     if item_name_x is None or item_no_x is None:
         return results
 
-    page_right = max(
-        w["x1"]
-        for r in rows
-        for w in r["words"]
-    )
-
-    # -------------------------------------------------
-    # 3️⃣ DEFINE COLUMN BOUNDS (AS YOU REQUESTED)
-    # -------------------------------------------------
-
     BIG_MARGIN = 25
     SMALL_MARGIN = 10
 
-    # DESCRIPTION
     DESC_LEFT = qty_x + SMALL_MARGIN if qty_x else item_name_x - BIG_MARGIN
     DESC_RIGHT = item_no_x - BIG_MARGIN
 
-    # PART NUMBER
     PN_LEFT = item_no_x - BIG_MARGIN
     PN_RIGHT = item_no_x + BIG_MARGIN
 
-    if debug:
-        print("=" * 80)
-        print(f"[POS-ITEM BOUNDS] Page {page}")
-        print(f"DESC: {DESC_LEFT:.2f} → {DESC_RIGHT:.2f}")
-        print(f"PN:   {PN_LEFT:.2f} → {PN_RIGHT:.2f}")
-        print("=" * 80)
-
     header_bottom = max(w["bottom"] for w in header_row["words"])
 
-    # -------------------------------------------------
-    # 4️⃣ EXTRACT ROWS
-    # -------------------------------------------------
+    for r in rows:
 
-    for row in rows:
-
-        if row["top"] <= header_bottom:
+        if r["top"] <= header_bottom:
             continue
 
-        words = row["words"]
+        words = r["words"]
 
         pn_words = [
             w for w in words
@@ -179,8 +202,10 @@ def extract_pos_item_table(normalized_table, debug=False):
                 "page": page,
                 "part_no": pn_word["text"],
                 "description": description,
-                "drawing_number": drawing_no or ""
+                "drawing_number": drawing_no or "",
+                "title": table_title or ""
             }
+
             if debug:
                 trace = {
                     "pn_boxes": [{
@@ -201,11 +226,22 @@ def extract_pos_item_table(normalized_table, debug=False):
                         for w in desc_words
                     ]
                 }
-            
-                # 🔶 ADD DRAWING NUMBER BOX (YELLOW)
+
                 if drawing_box:
                     trace["drawing_box"] = drawing_box
-            
+
+                if table_title and title_words:
+                    trace["title_boxes"] = [
+                        {
+                            "text": w["text"],
+                            "x0": w["x0"],
+                            "x1": w["x1"],
+                            "top": w["top"],
+                            "bottom": w["bottom"],
+                        }
+                        for w in title_words
+                    ]
+
                 entry["trace"] = trace
 
             results.append(entry)

@@ -78,7 +78,7 @@ def extract_split_header_item_part_table(normalized_table, debug=False):
     part_number_word = number_positions[1]
 
     MARGIN_LEFT = 10
-    MARGIN_RIGHT = 20   # give PN enough breathing space
+    MARGIN_RIGHT = 10   # give PN enough breathing space
     
     # PART COLUMN
     PART_LEFT = part_number_word["x0"] - MARGIN_LEFT

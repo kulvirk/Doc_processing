@@ -144,6 +144,59 @@ def extract_pos_drawing_table(normalized_table, debug=False):
             break
             
     # -------------------------------------------------
+    # 🔴 STRUCTURAL TITLE EXTRACTION (POS-DRAW)
+    # -------------------------------------------------
+
+    table_title = None
+    title_words = []
+
+    drawing_row = None
+
+    for r in rows[:6]:
+        for w in r["words"]:
+            if w["text"].lower().replace(" ", "") == "documentname":
+                drawing_row = r
+                break
+        if drawing_row:
+            break
+
+    if drawing_row:
+
+        words_sorted = sorted(drawing_row["words"], key=lambda w: w["x0"])
+
+        document_x = None
+        revision_x = None
+
+        for w in words_sorted:
+            txt = w["text"].lower().replace(" ", "")
+            if txt == "documentname":
+                document_x = w["x0"]
+            if txt.startswith("drawingrevision"):
+                revision_x = w["x0"]
+
+        if document_x is not None:
+
+            LEFT = document_x - 5
+            RIGHT = revision_x - 5 if revision_x else float("inf")
+
+            TOP = max(w["bottom"] for w in drawing_row["words"])
+            BOTTOM = min(w["top"] for w in header_row["words"]) - 5
+
+            for r in rows:
+                if r["top"] <= TOP:
+                    continue
+                if r["top"] >= BOTTOM:
+                    break
+
+                for w in r["words"]:
+                    if LEFT <= w["x0"] <= RIGHT:
+                        title_words.append(w)
+
+            if title_words:
+                title_words = sorted(title_words, key=lambda x: (x["top"], x["x0"]))
+                table_title = " ".join(w["text"] for w in title_words).strip()
+   
+    # -------------------------------------------------
     # 5️⃣ EXTRACT ROWS
     # -------------------------------------------------
     current_part = None
@@ -183,7 +236,8 @@ def extract_pos_drawing_table(normalized_table, debug=False):
                     "page": page,
                     "part_no": current_part,
                     "description": description,
-                    "drawing_number": drawing_number or ""
+                    "drawing_number": drawing_number or "",
+                    "title": table_title or ""
                 }
 
                 if debug:
@@ -238,7 +292,8 @@ def extract_pos_drawing_table(normalized_table, debug=False):
             "page": page,
             "part_no": current_part,
             "description": description,
-            "drawing_number": drawing_number or ""
+            "drawing_number": drawing_number or "",
+            "title": table_title or ""
         }
 
         if debug:
@@ -265,8 +320,22 @@ def extract_pos_drawing_table(normalized_table, debug=False):
                 ]
             }
 
+            # 🔶 Drawing number box
             if drawing_box:
                 entry["trace"]["drawing_box"] = drawing_box
+
+            # 🔴 Title boxes (NEW)
+            if table_title and title_words:
+                entry["trace"]["title_boxes"] = [
+                    {
+                        "text": w["text"],
+                        "x0": w["x0"],
+                        "x1": w["x1"],
+                        "top": w["top"],
+                        "bottom": w["bottom"],
+                    }
+                    for w in title_words
+                ]
 
         results.append(entry)
 

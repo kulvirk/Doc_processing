@@ -15,66 +15,114 @@ ITEM_NO_REGEX = re.compile(
 DRAWING_REF_REGEX = re.compile(
     r"\bD\d{4}[-]?\d+\b"
 )
+
 def _extract_alt_id_structural_title(normalized_table):
 
     rows = normalized_table.get("rows", [])
     if not rows:
         return None, []
 
-    drawing_name_row = None
-    header_row = None
+    drawing_row = None
 
     # -------------------------------------------------
-    # 1️⃣ Detect Drawing Name row and table header
+    # 1️⃣ Find DrawingName row
     # -------------------------------------------------
     for row in rows:
         row_text = " ".join(w["text"].lower() for w in row["words"])
-
-        if "drawing" in row_text and "name" in row_text:
-            drawing_name_row = row
-
-        if "alternate" in row_text or "item no" in row_text:
-            header_row = row
-
-    if not drawing_name_row or not header_row:
-        return None, []
-
-    header_top = min(w["top"] for w in header_row["words"])
-
-    # -------------------------------------------------
-    # 2️⃣ Find value column start (after label)
-    # -------------------------------------------------
-    sorted_words = sorted(drawing_name_row["words"], key=lambda w: w["x0"])
-
-    value_start_x = None
-
-    for i, w in enumerate(sorted_words):
-        if "name" in w["text"].lower():
-            if i + 1 < len(sorted_words):
-                value_start_x = sorted_words[i + 1]["x0"]
+        if "drawingname" in row_text.replace(" ", ""):
+            drawing_row = row
             break
 
-    if value_start_x is None:
+    if not drawing_row:
         return None, []
 
-    # Right bound = stop before next metadata column
-    # We use header row width as safe max
-    header_words = sorted(header_row["words"], key=lambda w: w["x0"])
-    right_bound = header_words[-1]["x1"] - 10
+    # -------------------------------------------------
+    # 2️⃣ Determine RIGHT bound (first metadata column)
+    # -------------------------------------------------
+    metadata_keywords = [
+        "remarks",
+        "drawingrevision",
+        "revision",
+        "updated",
+        "machinenumber"
+    ]
 
-    top_bound = max(w["bottom"] for w in drawing_name_row["words"])
-    bottom_bound = header_top - 5
+    drawing_words = sorted(drawing_row["words"], key=lambda w: w["x0"])
+
+    right_anchor_x = None
+    for w in drawing_words:
+        txt = w["text"].lower().replace(" ", "")
+        if any(k in txt for k in metadata_keywords):
+            right_anchor_x = w["x0"]
+            break
+
+    RIGHT = right_anchor_x - 5 if right_anchor_x else float("inf")
 
     # -------------------------------------------------
-    # 3️⃣ Collect only value-column words
+    # 2️⃣ Horizontal bounds (SIMPLE VERSION)
+    # -------------------------------------------------
+    
+    drawing_words = sorted(drawing_row["words"], key=lambda w: w["x0"])
+    
+    drawingname_x = None
+    right_anchor_x = None
+    
+    for w in drawing_words:
+        txt = w["text"].lower().replace(" ", "")
+    
+        if txt.startswith("drawingname"):
+            drawingname_x = w["x0"]
+    
+        if txt.startswith("remarks") or txt.startswith("drawingrevision"):
+            right_anchor_x = w["x0"]
+    
+    if drawingname_x is None:
+        return None, []
+    
+    LEFT = drawingname_x - 5
+    RIGHT = right_anchor_x - 5 if right_anchor_x else float("inf")
+
+    # -------------------------------------------------
+    # 3️⃣ Vertical scan (LOOK AHEAD 30px)
+    # -------------------------------------------------
+    
+    TOP = max(w["bottom"] for w in drawing_row["words"])
+    
+    MAX_LOOKAHEAD = 35  # 25–35 works well
+    
+    title_words = []
+    
+    for row in rows:
+    
+        # skip rows above drawing row
+        if row["top"] <= TOP:
+            continue
+    
+        # stop scanning after vertical limit
+        if row["top"] - TOP > MAX_LOOKAHEAD:
+            break
+    
+        for w in row["words"]:
+            if LEFT <= w["x0"] <= RIGHT:
+                title_words.append(w)
+    
+    if not title_words:
+        return None, []
+    
+    TOP = max(w["bottom"] for w in drawing_row["words"])
+    
+    MAX_TITLE_HEIGHT = 40   # <-- your 30–45px window
+    BOTTOM = TOP + MAX_TITLE_HEIGHT
+    # -------------------------------------------------
+    # 5️⃣ Collect words inside rectangle
     # -------------------------------------------------
     title_words = []
 
     for row in rows:
         for w in row["words"]:
             if (
-                value_start_x <= w["x0"] <= right_bound
-                and top_bound <= w["top"] <= bottom_bound
+                LEFT <= w["x0"] <= RIGHT
+                and TOP <= w["top"] <= BOTTOM
             ):
                 title_words.append(w)
 
@@ -85,6 +133,7 @@ def _extract_alt_id_structural_title(normalized_table):
     title = " ".join(w["text"] for w in title_words).strip()
 
     return title, title_words
+
 def extract_drawing_number_from_rows(rows):
 
     for row in rows[:10]:
